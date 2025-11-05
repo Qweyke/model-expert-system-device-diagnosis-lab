@@ -12,11 +12,11 @@
         (default unknown))
     (slot led-color 
         (type SYMBOL)
-        (allowed-symbols red green yellow blank unknown)
+        (allowed-symbols red green yellow blue none unknown)
         (default unknown))
     (slot internal-state 
         (type SYMBOL)
-        (allowed-symbols ok errfile erraddress errunkn unknown)
+        (allowed-symbols errfile erraddress unknown)
         (default unknown))
 )
 
@@ -50,9 +50,79 @@
     )
 )
 
-(defrule check-device-power
+(defrule check-power
     ?device-id <- (device (power unknown))
     =>
     (bind ?user-input (ask-slot-value-with-validation device power))
     (modify ?device-id (power ?user-input))
+)
+
+(defrule check-led-color
+    ?device-id <- (device (power on) (led-color unknown))
+    =>
+    (bind ?user-input (ask-slot-value-with-validation device led-color))
+    (modify ?device-id (led-color ?user-input))
+)
+
+(defrule check-internal-state
+    ?device-id <- (device (power on) (led-color yellow))
+    =>
+    (bind ?user-input (ask-slot-value-with-validation device internal-state))
+    (modify ?device-id (internal-state ?user-input))
+)
+
+(defrule diagnose-no-power
+    (device (power off))
+    =>
+    (printout t "Diagnosis: Connect the power supply to device" crlf)
+    (halt)
+)
+
+(defrule diagnose-led-none
+   (device (power on) (led-color none))
+   =>
+   (printout t "Diagnosis: Hardware fault detected - send the board for physical diagnostics" crlf)
+   (halt)
+)
+
+(defrule diagnose-led-red
+   (device (power on) (led-color red))
+   =>
+   (printout t "Diagnosis: CPU malfunction - send the board for CPU reballing" crlf)
+   (halt)
+)
+
+(defrule diagnose-led-yellow-errfile
+   (device (power on) (led-color yellow) (internal-state errfile))
+   =>
+   (printout t "Diagnosis: Flash error - reflash device with Stable.bin image" crlf)
+   (halt)
+)
+
+(defrule diagnose-led-yellow-erraddr
+   (device (power on) (led-color yellow) (internal-state erraddress))
+   =>
+   (printout t "Diagnosis: Bootloader address fault - reflash device with Recovery.bin image" crlf)
+   (halt)
+)
+
+(defrule diagnose-led-green-ok
+   (device (power on) (led-color green))
+   =>
+   (printout t "Diagnosis: Device fully operational - ready for casing" crlf)
+   (halt)
+)
+
+(defrule diagnose-hw-fault
+   (device (power on) (led-color none))
+   =>
+   (printout t "Diagnosis: Hardware fault - board must be sent for physical inspection" crlf)
+   (halt)
+)
+
+(defrule diagnose-led-blue
+   (device (power on) (led-color blue))
+   =>
+   (printout t "Diagnosis: Firmware update process detected" crlf)
+   (halt)
 )
