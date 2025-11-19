@@ -1,31 +1,64 @@
-# expert_sys_terminal.py
 from experta import *
+import sys
 
 
 class Device(Fact):
-    """Template: Terminal-device status"""
+    """Terminal-device status"""
 
-    power: str = "unknown"
-    led_color: str = "unknown"
-    internal_state: str = "unknown"
+    power = Field(str, default="unknown")
+    led_color = Field(str, default="unknown")
+    internal_state = Field(str, default="unknown")
+
+    allowed_vals = {
+        "power": ["on", "off", "unknown"],
+        "led_color": ["red", "green", "yellow", "blue", "none", "unknown"],
+        "internal_state": ["errfile", "erraddress", "unknown"],
+    }
 
 
-class DeviceExpertSystem(KnowledgeEngine):
+def ask_slot_value_with_validation(slot):
+    allowed = Device.allowed_vals.get(slot)
+    if not allowed:
+        print(f"Slot {slot} has no allowed values.")
+        sys.exit(1)
 
-    # --- Rules to ask slot values ---
-    @Rule(Device(power="unknown"))
-    def check_power(self):
-        self.modify(self.facts[1], power=self.ask_slot_value("power"))
+    while True:
+        print(f"What's the status of {slot}: {allowed}?")
+        user_input = input(">>> ").lower().strip()
+        if user_input in allowed:
+            return user_input
+        print(f"Validate answer: Fail / Allowed answers are: {allowed}")
 
-    @Rule(Device(power="on", led_color="unknown"))
-    def check_led_color(self):
-        self.modify(self.facts[1], led_color=self.ask_slot_value("led_color"))
 
-    @Rule(Device(power="on", led_color="yellow", internal_state="unknown"))
-    def check_internal_state(self):
-        self.modify(self.facts[1], internal_state=self.ask_slot_value("internal_state"))
+class DeviceDiagnosisEngine(KnowledgeEngine):
 
-    # --- Diagnosis Rules ---
+    @DefFacts()
+    def _initial_fact(self):
+        yield Device()
+
+    # --------------------------
+    # INTERACTIVE RULES
+    # --------------------------
+
+    @Rule(AS.dev << Device(power="unknown"))
+    def check_power(self, dev):
+        user_input = ask_slot_value_with_validation("power")
+        self.modify(dev, power=user_input)
+
+    @Rule(AS.dev << Device(power="on", led_color="unknown"))
+    def check_led_color(self, dev):
+        user_input = ask_slot_value_with_validation("led_color")
+        self.modify(dev, led_color=user_input)
+
+    @Rule(AS.dev << Device(power="on", led_color="yellow", internal_state="unknown"))
+    def check_internal_state(self, dev):
+        user_input = ask_slot_value_with_validation("internal_state")
+        self.modify(dev, internal_state=user_input)
+
+    # --------------------------
+    # DIAGNOSES
+    # --------------------------
+
     @Rule(Device(power="off"))
     def diagnose_no_power(self):
         print("Diagnosis: Connect the power supply to device")
@@ -65,34 +98,12 @@ class DeviceExpertSystem(KnowledgeEngine):
         print("Diagnosis: Firmware update process detected")
         self.halt()
 
-    # --- Slot asking method ---
-    def ask_slot_value(self, slot: str) -> str:
-        allowed_values = {
-            "power": ["on", "off", "unknown"],
-            "led_color": ["red", "green", "yellow", "blue", "none", "unknown"],
-            "internal_state": ["errfile", "erraddress", "unknown"],
-        }
-        while True:
-            val = (
-                input(
-                    f"[Device Poll] What's the status of {slot}? {allowed_values[slot]}: "
-                )
-                .strip()
-                .lower()
-            )
-            if val in allowed_values[slot]:
-                return val
-            print(f"Invalid input. Allowed: {allowed_values[slot]}")
 
-
-# --- Terminal Start Function (like CLIPS start) ---
 def start():
-    engine = DeviceExpertSystem()
-    engine.reset()  # Reset engine
-    engine.declare(Device())  # Declare initial device fact
-    engine.run()  # Run engine
+    engine = DeviceDiagnosisEngine()
+    engine.reset()
+    engine.run()
 
 
 if __name__ == "__main__":
-    print("=== Device Expert System ===")
     start()
